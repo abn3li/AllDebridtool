@@ -135,8 +135,7 @@ fun HomeScreen(viewModel: AppViewModel) {
 
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.weight(1f),
-                beyondBoundsPageCount = 1
+                modifier = Modifier.weight(1f)
             ) { page ->
                 when (HomeTab.entries[page]) {
                     HomeTab.MAGNET -> MagnetTab(viewModel = viewModel)
