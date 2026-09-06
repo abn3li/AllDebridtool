@@ -1,0 +1,85 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="512dp"
+    android:height="512dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Background with Gradient -->
+    <path
+        android:pathData="M136,32 h240 a104,104 0 0 1 104,104 v240 a104,104 0 0 1 -104,104 h-240 a104,104 0 0 1 -104,-104 v-240 a104,104 0 0 1 104,-104 z"
+        android:strokeWidth="6"
+        android:strokeColor="#CA8A04">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="32"
+                android:startY="32"
+                android:endX="480"
+                android:endY="480"
+                android:type="linear">
+                <item android:offset="0" android:color="#1F242A" />
+                <item android:offset="0.5" android:color="#14171C" />
+                <item android:offset="1" android:color="#0A0C0F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Cloud Shape -->
+    <path
+        android:pathData="M370 230C370 191.34 338.66 160 300 160C286.32 160 273.66 164.03 263.02 170.92C241.97 146.54 209.11 130 172 130C110.15 130 60 180.15 60 242C60 252.88 61.53 263.42 64.39 273.41C48.69 285.45 38 304.38 38 326C38 362.34 67.66 392 104 392H374C404.93 392 430 366.93 430 336C430 309.28 411.39 286.99 386.58 281.3C375.45 264.88 370 244.59 370 230Z"
+        android:fillAlpha="0.25">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="38"
+                android:startY="130"
+                android:endX="430"
+                android:endY="392"
+                android:type="linear">
+                <item android:offset="0" android:color="#FDE047" />
+                <item android:offset="1" android:color="#A16207" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Stylized 'A' -->
+    <path
+        android:pathData="M256 120L130 340H185L256 215L327 340H382L256 120Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="130"
+                android:startY="120"
+                android:endX="382"
+                android:endY="340"
+                android:type="linear">
+                <item android:offset="0" android:color="#FEF08A" />
+                <item android:offset="0.4" android:color="#EAB308" />
+                <item android:offset="1" android:color="#854D0E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner shadow cutout -->
+    <path
+        android:pathData="M210 270H302L256 190L210 270Z"
+        android:fillColor="#111111" />
+
+    <!-- Download Arrow -->
+    <path
+        android:pathData="M256 190V380M256 380L205 320M256 380L307 320"
+        android:strokeWidth="32"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="256"
+                android:startY="190"
+                android:endX="256"
+                android:endY="380"
+                android:type="linear">
+                <item android:offset="0" android:color="#FEF9C3" />
+                <item android:offset="1" android:color="#CA8A04" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+</vector>
