@@ -11,7 +11,6 @@ import com.example.alldebrid.data.PreferencesManager
 import com.example.alldebrid.data.ThemeMode
 import com.example.alldebrid.data.UserInfo
 import com.example.alldebrid.data.HostInfo
-import com.example.alldebrid.data.HostsResponse
 import com.example.alldebrid.data.LinkUnlockResponse
 import com.example.alldebrid.data.SavedLink
 import kotlinx.coroutines.async
@@ -60,10 +59,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val magnets: StateFlow<List<Magnet>> = _magnets.asStateFlow()
 
     private val _savedLinks = MutableStateFlow<List<SavedLink>>(emptyList())
-    val savedLinks: StateFlow<List<SavedLink>> = _savedLinks.asStateFlow()
 
     private val _historyLinks = MutableStateFlow<List<SavedLink>>(emptyList())
-    val historyLinks: StateFlow<List<SavedLink>> = _historyLinks.asStateFlow()
 
     private val _hiddenLinks = MutableStateFlow<Set<String>>(emptySet())
 
@@ -379,7 +376,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             } else {
                                 fetched
                             }
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             fetched
                         }
                     }

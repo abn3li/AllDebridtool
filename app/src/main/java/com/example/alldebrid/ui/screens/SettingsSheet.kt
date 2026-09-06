@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.alldebrid.data.ThemeMode
 import com.example.alldebrid.viewmodel.AppViewModel
 import java.text.SimpleDateFormat
@@ -43,7 +42,7 @@ fun SettingsSheet(viewModel: AppViewModel, onDismiss: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp, start = 24.dp, end = 24.dp, top = 8.dp)
+                .padding(bottom = 32.dp, start = 24.dp, end = 24.dp, top = 8.dp),
         ) {
             AnimatedContent(
                 targetState = currentScreen,
@@ -118,7 +117,7 @@ fun SettingsSheet(viewModel: AppViewModel, onDismiss: () -> Unit) {
                                     value = if (it.isPremium == true) "Premium" else "Free",
                                     valueColor = if (it.isPremium == true) Color(0xFFFACC15) else MaterialTheme.colorScheme.onSurface
                                 )
-                                if (it.isPremium == true && it.premiumUntil != null) {
+                                if ((it.isPremium == true) && (it.premiumUntil != null)) {
                                     val dateStr = remember(it.premiumUntil) {
                                         val date = Date(it.premiumUntil * 1000L)
                                         SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault()).format(date)
