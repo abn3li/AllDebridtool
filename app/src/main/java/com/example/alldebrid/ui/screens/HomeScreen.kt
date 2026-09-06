@@ -116,7 +116,7 @@ fun HomeScreen(viewModel: AppViewModel) {
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            TabRow(selectedTabIndex = pagerState.currentPage) {
+            SecondaryTabRow(selectedTabIndex = pagerState.currentPage) {
                 HomeTab.entries.forEach { tab ->
                     Tab(
                         selected = pagerState.currentPage == tab.ordinal,
