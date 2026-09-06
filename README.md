@@ -21,6 +21,11 @@ A native Android app for the [AllDebrid](https://alldebrid.com) service, built w
 - ⚡ **High Performance** — supports 120Hz+ refresh rates for buttery smooth swiping and scrolling.
 - 🎨 Built entirely with **Material 3** — modern design with an edge-to-edge immersive experience.
 
+## Screenshots
+<img width="1080" height="2007" alt="28271" src="https://github.com/user-attachments/assets/8dc7704b-924b-436c-9fcc-9cdf7dcd44ec" />
+<img width="1080" height="2081" alt="28272" src="https://github.com/user-attachments/assets/067e3267-21c6-4866-aaf4-ba0e3fc3ce52" />
+<img width="1080" height="2127" alt="28273" src="https://github.com/user-attachments/assets/7671d5c4-672b-4e76-b4ec-8636b21d6e83" />
+
 ## 🏗️ Project structure
 
 ```
