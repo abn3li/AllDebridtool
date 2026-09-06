@@ -166,8 +166,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshLibrary(force: Boolean = false) {
         val now = System.currentTimeMillis()
         val shouldRefreshFull = force || (now - lastLibraryRefresh > 30_000)
-        if (shouldRefreshFull) lastLibraryRefresh = now
+        if (shouldRefreshFull) {
+            lastLibraryRefresh = now
+            refreshUserInfo()
+        }
         refreshMagnets(full = shouldRefreshFull)
+    }
+
+    fun refreshUserInfo() {
+        val repo = repository ?: return
+        viewModelScope.launch {
+            when (val result = repo.verifyUser()) {
+                is ApiResult.Success -> _user.value = result.data
+                is ApiResult.Failure -> { /* maybe logged out or network error */ }
+            }
+        }
     }
 
     fun refreshHosts() {
@@ -245,6 +258,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             repository = null
             _user.value = null
             _magnets.value = emptyList()
+            _savedLinks.value = emptyList()
+            _historyLinks.value = emptyList()
+            _unlockedHistory.value = emptyList()
+            deletingIds.clear()
+            deletingLinks.clear()
             pollingStarted = false
             _loginState.value = LoginState.LOGGED_OUT
         }
