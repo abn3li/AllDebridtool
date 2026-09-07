@@ -1,6 +1,7 @@
 package com.example.alldebrid.data
 
 import android.util.Log
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -59,6 +60,22 @@ class AllDebridRepository(private val apiKey: String) {
             } else {
                 ApiResult.Failure(
                     result?.error?.message ?: response.error?.message ?: "Could not add magnet",
+                )
+            }
+        } catch (e: Exception) {
+            ApiResult.Failure(e.localizedMessage ?: "Network error")
+        }
+    }
+
+    suspend fun uploadTorrentFile(filePart: MultipartBody.Part): ApiResult<MagnetUploadResult> {
+        return try {
+            val response = api.uploadTorrentFile(agent, apiKey, filePart)
+            val result = response.data?.magnets?.firstOrNull()
+            if (response.status == "success" && result != null && result.error == null) {
+                ApiResult.Success(result)
+            } else {
+                ApiResult.Failure(
+                    result?.error?.message ?: response.error?.message ?: "Could not upload torrent file",
                 )
             }
         } catch (e: Exception) {

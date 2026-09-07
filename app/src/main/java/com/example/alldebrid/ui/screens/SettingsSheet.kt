@@ -1,8 +1,9 @@
 package com.example.alldebrid.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
@@ -47,11 +48,7 @@ fun SettingsSheet(viewModel: AppViewModel, onDismiss: () -> Unit) {
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = {
-                    if (targetState != SettingsScreen.MAIN) {
-                        slideInHorizontally { it }.togetherWith(slideOutHorizontally { -it })
-                    } else {
-                        slideInHorizontally { -it }.togetherWith(slideOutHorizontally { it })
-                    }
+                    fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
                 },
                 label = "SettingsNav"
             ) { screen ->

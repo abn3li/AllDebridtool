@@ -1,6 +1,9 @@
 package com.example.alldebrid.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alldebrid.data.AllDebridRepository
@@ -13,6 +16,9 @@ import com.example.alldebrid.data.UserInfo
 import com.example.alldebrid.data.HostInfo
 import com.example.alldebrid.data.LinkUnlockResponse
 import com.example.alldebrid.data.SavedLink
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
@@ -289,6 +295,52 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             _uploadInProgress.value = false
         }
+    }
+
+    fun uploadTorrentFile(uri: Uri, context: Context) {
+        val repo = repository ?: return
+        viewModelScope.launch {
+            _uploadInProgress.value = true
+            _uploadMessage.value = null
+            try {
+                val fileName = getFileName(context, uri)
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.readBytes()
+                if (bytes == null) {
+                    _uploadMessage.value = "Failed to read torrent file"
+                    _uploadInProgress.value = false
+                    return@launch
+                }
+                val requestBody = bytes.toRequestBody("application/x-bittorrent".toMediaTypeOrNull())
+                val part = MultipartBody.Part.createFormData("files[]", fileName, requestBody)
+
+                when (val result = repo.uploadTorrentFile(part)) {
+                    is ApiResult.Success -> {
+                        _uploadMessage.value = "Added torrent: ${result.data.name ?: fileName}"
+                        refreshMagnets()
+                    }
+                    is ApiResult.Failure -> {
+                        _uploadMessage.value = "Failed: ${result.message}"
+                    }
+                }
+            } catch (e: Exception) {
+                _uploadMessage.value = "Failed: ${e.localizedMessage}"
+            }
+            _uploadInProgress.value = false
+        }
+    }
+
+    private fun getFileName(context: Context, uri: Uri): String {
+        var name = "torrent_file.torrent"
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1) {
+                    name = cursor.getString(nameIndex) ?: name
+                }
+            }
+        }
+        return name
     }
 
     fun deleteMagnet(id: Long) {

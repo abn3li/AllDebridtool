@@ -1,9 +1,12 @@
 package com.example.alldebrid.data
 
+import okhttp3.MultipartBody
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Query
 
 interface AllDebridApi {
@@ -21,17 +24,18 @@ interface AllDebridApi {
         @Query("magnets[]") magnet: String,
     ): ApiEnvelope<MagnetUploadResponse>
 
+    @Multipart
+    @POST("v4/magnet/upload")
+    suspend fun uploadTorrentFile(
+        @Query("agent") agent: String,
+        @Query("apikey") apiKey: String,
+        @Part file: MultipartBody.Part,
+    ): ApiEnvelope<MagnetUploadResponse>
+
     @GET("v4.1/magnet/status")
     suspend fun getAllMagnetStatus(
         @Query("agent") agent: String,
         @Query("apikey") apiKey: String,
-    ): ApiEnvelope<MagnetStatusListResponse>
-
-    @GET("v4.1/magnet/status")
-    suspend fun getMagnetStatus(
-        @Query("agent") agent: String,
-        @Query("apikey") apiKey: String,
-        @Query("id[]") id: Long,
     ): ApiEnvelope<MagnetStatusListResponse>
 
     @GET("v4/magnet/files")
