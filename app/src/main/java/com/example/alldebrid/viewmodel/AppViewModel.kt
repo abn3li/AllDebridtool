@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.net.URLEncoder
 import kotlin.time.Duration.Companion.seconds
 
 enum class LoginState { CHECKING, LOGGED_OUT, LOGGING_IN, LOGGED_IN, ERROR }
