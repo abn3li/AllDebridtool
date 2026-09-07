@@ -1,9 +1,7 @@
 package com.example.alldebrid.viewmodel
 
 import android.app.Application
-import android.content.Context
-import android.net.Uri
-import android.provider.OpenableColumns
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alldebrid.data.AllDebridRepository
@@ -16,9 +14,6 @@ import com.example.alldebrid.data.UserInfo
 import com.example.alldebrid.data.HostInfo
 import com.example.alldebrid.data.LinkUnlockResponse
 import com.example.alldebrid.data.SavedLink
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
@@ -32,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.net.URLEncoder
 import kotlin.time.Duration.Companion.seconds
 
 enum class LoginState { CHECKING, LOGGED_OUT, LOGGING_IN, LOGGED_IN, ERROR }
@@ -287,7 +283,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             when (val result = repo.uploadMagnet(magnetLink.trim())) {
                 is ApiResult.Success -> {
                     _uploadMessage.value = "Added: ${result.data.name ?: "magnet"}"
-                    refreshMagnets()
+                    refreshMagnets(full = true)
+                    delay(2.seconds)
+                    refreshMagnets(full = true)
                 }
                 is ApiResult.Failure -> {
                     _uploadMessage.value = "Failed: ${result.message}"
@@ -295,52 +293,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             _uploadInProgress.value = false
         }
-    }
-
-    fun uploadTorrentFile(uri: Uri, context: Context) {
-        val repo = repository ?: return
-        viewModelScope.launch {
-            _uploadInProgress.value = true
-            _uploadMessage.value = null
-            try {
-                val fileName = getFileName(context, uri)
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bytes = inputStream?.readBytes()
-                if (bytes == null) {
-                    _uploadMessage.value = "Failed to read torrent file"
-                    _uploadInProgress.value = false
-                    return@launch
-                }
-                val requestBody = bytes.toRequestBody("application/x-bittorrent".toMediaTypeOrNull())
-                val part = MultipartBody.Part.createFormData("files[]", fileName, requestBody)
-
-                when (val result = repo.uploadTorrentFile(part)) {
-                    is ApiResult.Success -> {
-                        _uploadMessage.value = "Added torrent: ${result.data.name ?: fileName}"
-                        refreshMagnets()
-                    }
-                    is ApiResult.Failure -> {
-                        _uploadMessage.value = "Failed: ${result.message}"
-                    }
-                }
-            } catch (e: Exception) {
-                _uploadMessage.value = "Failed: ${e.localizedMessage}"
-            }
-            _uploadInProgress.value = false
-        }
-    }
-
-    private fun getFileName(context: Context, uri: Uri): String {
-        var name = "torrent_file.torrent"
-        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIndex != -1) {
-                    name = cursor.getString(nameIndex) ?: name
-                }
-            }
-        }
-        return name
     }
 
     fun deleteMagnet(id: Long) {
@@ -386,6 +338,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshMagnets(full: Boolean = false) {
         val repo = repository ?: return
         viewModelScope.launch {
+            Log.d("AppViewModel", "--- START POLL / REFRESH MAGNETS (full=$full) ---")
             val magnetsDeferred = async { repo.getAllMagnets() }
             val linksDeferred = if (full) async { repo.getUserLinks() } else null
             val historyDeferred = if (full) async { repo.getUserHistory() } else null
@@ -402,39 +355,92 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             if (magnetsResult is ApiResult.Success) {
+                val rawFetched = magnetsResult.data
+                Log.d("AppViewModel", "RAW /v4.1/magnet/status returned ${rawFetched.size} magnet(s):")
+                rawFetched.forEach { m ->
+                    Log.d("AppViewModel", "  -> ID: ${m.id} | Name: '${m.filename}' | status (string): '${m.status}' | statusCode (int): ${m.statusCode} | seeders: ${m.seeders} | speed: ${m.downloadSpeed}")
+                }
+
+                // Force dump ID-to-status map for debugging
+                val idStatusMap = rawFetched.associate { it.id to "status='${it.status}', statusCode=${it.statusCode}" }
+                Log.d("AppViewModel", "DEBUG MAP (ID -> status): $idStatusMap")
+
                 val currentMagnets = _magnets.value
-                val fetchedMagnets = magnetsResult.data.filter { it.id !in deletingIds }
+                val fetchedMagnets = rawFetched.filter { it.id !in deletingIds }
 
                 val enrichedMagnets = fetchedMagnets.map { fetched ->
                     async {
                         try {
                             val id = fetched.id
-                            val isReady = fetched.status?.equals("Ready", ignoreCase = true) == true || fetched.statusCode == 4
-                            val hasNoLinks = fetched.links.isNullOrEmpty()
+                            // Authoritative check: statusCode == 4 or status == "Ready"
+                            val isReady = fetched.statusCode == 4 || fetched.status?.equals("Ready", ignoreCase = true) == true
 
-                            if (id != null && isReady && hasNoLinks) {
+                            Log.d("AppViewModel", "Evaluating Magnet ID $id: isReady=$isReady (statusCode=${fetched.statusCode}, status='${fetched.status}')")
+
+                            if (id != null && isReady) {
                                 val existing = currentMagnets.find { it.id == id }
-                                if (existing != null && !existing.links.isNullOrEmpty()) {
+                                // If we already unlocked links for this ready magnet, reuse them
+                                if (existing != null && !existing.links.isNullOrEmpty() && existing.links.all { !it.link.isNullOrBlank() && it.link.startsWith("http") }) {
+                                    Log.d("AppViewModel", "Using already unlocked direct links for Ready Magnet ID $id")
                                     existing
                                 } else {
-                                    when (val detailResult = repo.getMagnetDetails(id)) {
-                                        is ApiResult.Success -> {
-                                            // MERGE links into metadata, don't replace metadata
-                                            fetched.copy(links = detailResult.data.links)
+                                    Log.d("AppViewModel", "Magnet ID $id is READY. Fetching details & automatically unlocking links via /v4/link/unlock...")
+                                    val detailResult = when {
+                                        !fetched.links.isNullOrEmpty() -> ApiResult.Success(fetched)
+                                        else -> repo.getMagnetDetails(id)
+                                    }
+
+                                    if (detailResult is ApiResult.Success) {
+                                        val rawLinks = detailResult.data.links ?: emptyList()
+                                        val unlockedLinks = mutableListOf<MagnetLink>()
+
+                                        for (ml in rawLinks) {
+                                            val intermediateUrl = ml.link
+                                            if (!intermediateUrl.isNullOrBlank()) {
+                                                Log.d("AppViewModel", "-> REQUEST /v4/link/unlock?link=$intermediateUrl")
+                                                when (val unlockResult = repo.unlockLink(intermediateUrl)) {
+                                                    is ApiResult.Success -> {
+                                                        val directUrl = unlockResult.data.link
+                                                        val resolvedName = unlockResult.data.filename ?: ml.filename ?: fetched.filename ?: "File"
+                                                        val resolvedSize = unlockResult.data.filesize ?: ml.size
+                                                        Log.d("AppViewModel", "<- SUCCESS /v4/link/unlock: directUrl=$directUrl, filename=$resolvedName")
+                                                        unlockedLinks.add(
+                                                            MagnetLink(
+                                                                link = directUrl,
+                                                                filename = resolvedName,
+                                                                size = resolvedSize,
+                                                                elements = ml.elements
+                                                            )
+                                                        )
+                                                    }
+                                                    is ApiResult.Failure -> {
+                                                        Log.e("AppViewModel", "<- FAILED /v4/link/unlock for $intermediateUrl: ${unlockResult.message}")
+                                                        unlockedLinks.add(ml)
+                                                    }
+                                                }
+                                            } else {
+                                                unlockedLinks.add(ml)
+                                            }
                                         }
-                                        is ApiResult.Failure -> fetched
+                                        fetched.copy(links = unlockedLinks)
+                                    } else {
+                                        Log.e("AppViewModel", "Failed to fetch details for Ready Magnet ID $id")
+                                        fetched
                                     }
                                 }
                             } else {
                                 fetched
                             }
-                        } catch (_: Exception) {
+                        } catch (e: Exception) {
+                            Log.e("AppViewModel", "Exception enriching magnet ID ${fetched.id}: ${e.localizedMessage}", e)
                             fetched
                         }
                     }
                 }.awaitAll()
 
-                _magnets.value = enrichedMagnets.sortedByDescending { it.uploadDate ?: 0L }
+                val sorted = enrichedMagnets.sortedByDescending { it.uploadDate ?: 0L }
+                _magnets.value = sorted.toList() // Ensure new reference to trigger StateFlow emission
+                Log.d("AppViewModel", "--- END POLL / REFRESH MAGNETS ---")
             }
         }
     }

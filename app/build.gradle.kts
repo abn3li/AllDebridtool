@@ -13,7 +13,7 @@ android {
     defaultConfig {
         applicationId = "com.example.alldebrid"
         minSdk = 24
-        targetSdk = 37
+        targetSdk = 35
         versionCode = 3
         versionName = "2.0"
     }
