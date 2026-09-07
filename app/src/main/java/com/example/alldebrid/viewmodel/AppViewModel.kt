@@ -107,34 +107,50 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // 2. Saved Links (Library)
         for (saved in savedLinks) {
             val link = saved.link
+            val fileName = saved.filename ?: "Saved File"
+            val size = saved.size
             if (!link.isNullOrBlank() && link !in hiddenLinks) {
-                allFiles.add(
-                    DownloadableFile(
-                        magnetId = null,
-                        magnetName = null,
-                        fileName = saved.filename ?: "Saved File",
-                        size = saved.size,
-                        link = link,
-                        source = FileSource.SAVED
+                val isDuplicate = allFiles.any { existing ->
+                    existing.link == link || 
+                    (existing.fileName.equals(fileName, ignoreCase = true) && (size == null || existing.size == size || existing.size == 0L || size == 0L))
+                }
+                if (!isDuplicate) {
+                    allFiles.add(
+                        DownloadableFile(
+                            magnetId = null,
+                            magnetName = null,
+                            fileName = fileName,
+                            size = size,
+                            link = link,
+                            source = FileSource.SAVED
+                        )
                     )
-                )
+                }
             }
         }
 
         // 3. History Links (Whole Library)
         for (hist in historyLinks) {
             val link = hist.link
-            if (!link.isNullOrBlank() && link !in hiddenLinks && allFiles.none { it.link == link }) {
-                allFiles.add(
-                    DownloadableFile(
-                        magnetId = null,
-                        magnetName = null,
-                        fileName = hist.filename ?: "History File",
-                        size = hist.size,
-                        link = link,
-                        source = FileSource.HISTORY
+            val fileName = hist.filename ?: "History File"
+            val size = hist.size
+            if (!link.isNullOrBlank() && link !in hiddenLinks) {
+                val isDuplicate = allFiles.any { existing ->
+                    existing.link == link || 
+                    (existing.fileName.equals(fileName, ignoreCase = true) && (size == null || existing.size == size || existing.size == 0L || size == 0L))
+                }
+                if (!isDuplicate) {
+                    allFiles.add(
+                        DownloadableFile(
+                            magnetId = null,
+                            magnetName = null,
+                            fileName = fileName,
+                            size = size,
+                            link = link,
+                            source = FileSource.HISTORY
+                        )
                     )
-                )
+                }
             }
         }
         allFiles
@@ -210,10 +226,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _uploadMessage.value = "Paste a link first"
             return
         }
+        val trimmed = url.trim()
+        if (trimmed.contains("debrid.it", ignoreCase = true)) {
+            val fakeResponse = LinkUnlockResponse(
+                link = trimmed,
+                filename = trimmed.substringAfterLast("/").ifBlank { "File" },
+                filesize = 0L,
+                host = "debrid.it"
+            )
+            val currentHistory = _unlockedHistory.value.toMutableList()
+            currentHistory.add(0, fakeResponse)
+            _unlockedHistory.value = currentHistory
+            onSuccess(fakeResponse)
+            return
+        }
         viewModelScope.launch {
             onUnlocking(true)
             _uploadMessage.value = null
-            when (val result = repo.unlockLink(url.trim())) {
+            when (val result = repo.unlockLink(trimmed)) {
                 is ApiResult.Success -> {
                     val currentHistory = _unlockedHistory.value.toMutableList()
                     currentHistory.add(0, result.data)
@@ -270,27 +300,67 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { prefs.saveThemeMode(mode) }
     }
 
-    fun submitMagnet(magnetLink: String) {
+    fun submitMagnet(magnetInput: String) {
         val repo = repository ?: return
-        if (magnetLink.isBlank()) {
+        if (magnetInput.isBlank()) {
             _uploadMessage.value = "Paste a magnet link first"
             return
         }
         viewModelScope.launch {
             _uploadInProgress.value = true
             _uploadMessage.value = null
-            when (val result = repo.uploadMagnet(magnetLink.trim())) {
-                is ApiResult.Success -> {
-                    _uploadMessage.value = "Added: ${result.data.name ?: "magnet"}"
-                    refreshMagnets(full = true)
-                    delay(2.seconds)
-                    refreshMagnets(full = true)
+
+            val links = magnetInput.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+
+            if (links.isEmpty()) {
+                _uploadMessage.value = "Paste a magnet link first"
+            } else {
+                var addedCount = 0
+                for (link in links) {
+                    val success = uploadSingleMagnet(repo, link)
+                    if (success) addedCount++
                 }
-                is ApiResult.Failure -> {
-                    _uploadMessage.value = "Failed: ${result.message}"
-                }
+                _uploadMessage.value = if (addedCount > 0) "Successfully added $addedCount magnet(s)" else "Failed to add magnet(s)"
+                refreshMagnets(full = true)
+                delay(3.seconds)
+                refreshMagnets(full = true)
             }
             _uploadInProgress.value = false
+        }
+    }
+
+    private suspend fun uploadSingleMagnet(repo: AllDebridRepository, magnetLink: String): Boolean {
+        return when (val result = repo.uploadMagnet(magnetLink)) {
+            is ApiResult.Success -> {
+                val data = result.data
+                val newMagnet = Magnet(
+                    id = data.id,
+                    filename = data.name ?: "New Magnet",
+                    size = data.size ?: 0L,
+                    hash = data.hash,
+                    status = if (data.ready == true) "Ready" else "Downloading",
+                    statusCode = if (data.ready == true) 4 else 1,
+                    downloaded = 0L,
+                    uploaded = 0L,
+                    seeders = 0,
+                    downloadSpeed = 0L,
+                    processingPerc = if (data.ready == true) 100.0 else 0.0,
+                    uploadDate = System.currentTimeMillis() / 1000L,
+                    completionDate = null,
+                    links = emptyList()
+                )
+                val currentList = _magnets.value.toMutableList()
+                if (newMagnet.id != null && currentList.none { it.id == newMagnet.id }) {
+                    currentList.add(0, newMagnet)
+                    _magnets.value = currentList
+                }
+                true
+            }
+            is ApiResult.Failure -> {
+                false
+            }
         }
     }
 
@@ -396,25 +466,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                         for (ml in rawLinks) {
                                             val intermediateUrl = ml.link
                                             if (!intermediateUrl.isNullOrBlank()) {
-                                                Log.d("AppViewModel", "-> REQUEST /v4/link/unlock?link=$intermediateUrl")
-                                                when (val unlockResult = repo.unlockLink(intermediateUrl)) {
-                                                    is ApiResult.Success -> {
-                                                        val directUrl = unlockResult.data.link
-                                                        val resolvedName = unlockResult.data.filename ?: ml.filename ?: fetched.filename ?: "File"
-                                                        val resolvedSize = unlockResult.data.filesize ?: ml.size
-                                                        Log.d("AppViewModel", "<- SUCCESS /v4/link/unlock: directUrl=$directUrl, filename=$resolvedName")
-                                                        unlockedLinks.add(
-                                                            MagnetLink(
-                                                                link = directUrl,
-                                                                filename = resolvedName,
-                                                                size = resolvedSize,
-                                                                elements = ml.elements
+                                                if (intermediateUrl.contains("debrid.it", ignoreCase = true)) {
+                                                    Log.d("AppViewModel", "Link already direct (debrid.it): $intermediateUrl")
+                                                    unlockedLinks.add(ml)
+                                                } else {
+                                                    Log.d("AppViewModel", "-> REQUEST /v4/link/unlock?link=$intermediateUrl")
+                                                    when (val unlockResult = repo.unlockLink(intermediateUrl)) {
+                                                        is ApiResult.Success -> {
+                                                            val directUrl = unlockResult.data.link
+                                                            val resolvedName = unlockResult.data.filename ?: ml.filename ?: fetched.filename ?: "File"
+                                                            val resolvedSize = unlockResult.data.filesize ?: ml.size
+                                                            Log.d("AppViewModel", "<- SUCCESS /v4/link/unlock: directUrl=$directUrl, filename=$resolvedName")
+                                                            unlockedLinks.add(
+                                                                MagnetLink(
+                                                                    link = directUrl,
+                                                                    filename = resolvedName,
+                                                                    size = resolvedSize,
+                                                                    elements = ml.elements
+                                                                )
                                                             )
-                                                        )
-                                                    }
-                                                    is ApiResult.Failure -> {
-                                                        Log.e("AppViewModel", "<- FAILED /v4/link/unlock for $intermediateUrl: ${unlockResult.message}")
-                                                        unlockedLinks.add(ml)
+                                                        }
+                                                        is ApiResult.Failure -> {
+                                                            Log.e("AppViewModel", "<- FAILED /v4/link/unlock for $intermediateUrl: ${unlockResult.message}")
+                                                            unlockedLinks.add(ml)
+                                                        }
                                                     }
                                                 }
                                             } else {
@@ -458,6 +533,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun unlockAndGetLink(link: String): String? {
         val repo = repository ?: return null
+        if (link.contains("debrid.it", ignoreCase = true)) {
+            return link
+        }
         return when (val result = repo.unlockLink(link)) {
             is ApiResult.Success -> result.data.link
             is ApiResult.Failure -> {
